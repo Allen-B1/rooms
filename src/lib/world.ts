@@ -1,5 +1,7 @@
 export interface World {
     things: Record<string, Thing>,
+    // peer id => thing id
+    players: Record<string, string>,
 };
 
 export type Thing = Player | Wall | Room;
@@ -11,7 +13,6 @@ interface BaseThing {
 export interface Player extends BaseThing { 
     type: "player",
     name: string,
-    peer_id: null | string,
 }
 export interface Wall extends BaseThing {
     type: "wall",
@@ -54,13 +55,14 @@ export const Worlds = {
     default(): World {
         return {
             things: {
-                me: { type: "player", name: "Host", x: 0, y: 0, peer_id: null },
+                me: { type: "player", name: "Host", x: 0, y: 0 },
                 wall1: { type: "wall", x: -5, y: -3, w: 11, h: 1, texture_id: 0 },
                 wall2: { type: "wall", x: -5, y: -3, w: 1, h: 7, texture_id: 0 },
                 wall3: { type: "wall", x: 5, y: -3, w: 1, h: 7, texture_id: 0 },
                 wall4: { type: "wall", x: -5, y: 3, w: 9, h: 1, texture_id: 0 },
                 room: { type: "room", x: -5, y: -3, w: 11, h: 7, background_id: 0 }
-            }
+            },
+            players: {}
         };
     }
 }

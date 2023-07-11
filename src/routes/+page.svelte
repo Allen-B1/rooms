@@ -21,19 +21,21 @@
 
     function host() {
         let peer = new Peer(PEER_PREFIX + Math.random().toString(36).slice(2), PEER_OPTIONS);
-        let connections = [];
+        let connections = {};
 
         peer.on("open", function() {
             console.log("connected with id: " +peer.id);
 
             status = "host";
             room_id = peer.id.slice(PEER_PREFIX.length);
-            $world.things[player_id].peer_id = peer.id;
+            $world.players[peer.id] = player_id;
 
             peer.on("connection", function(dc) {
                 dc.on("open", function() {
-                    connections.push(dc);
                     console.log("connected to remote peer " + dc.peer);
+
+                    // maintain connections
+                    connections[dc.peer] = dc;
 
                     // create Thing
                     let thing_id = Math.random().toString(36).slice(2);
@@ -42,17 +44,13 @@
                         name: dc.metadata.name,
                         x: 1,
                         y: 1,
-                        peer_id: dc.peer,
                     };
+                    $world.players[dc.peer] = thing_id;
 
                     // send thing id
                     dc.send(["player_id", thing_id]);
+                    dc.send(["world", $world]);
                     broadcast(connections, ["player_join", {id: thing_id, peer_id: dc.peer}]);
-
-                    // send updates to world
-                    let unsubscribe = world.subscribe(function(world) {
-                        dc.send(["world", world]);
-                    });
 
                     // handle events
                     dc.on("data", function(data: [string, any]) {
@@ -70,15 +68,17 @@
                     });
 
                     dc.on("close", function() {
-                        unsubscribe();
-                        
-                        let idx = connections.indexOf(dc);
-                        connections.splice(idx, 1);
+                        delete connections[dc.peer];
 
                         delete $world.things[thing_id];
+                        delete $world.players[dc.peer];
                     });
                 });
             });
+
+            world.subscribe((world) => {
+                broadcast(connections, ["world", world]);
+            })
         });
     }
 
@@ -108,7 +108,8 @@
                 }
             });
             dc.on("close", function() {
-                
+                status = null;
+                room_id = null;
                 client_dc = null;
             });
         });
