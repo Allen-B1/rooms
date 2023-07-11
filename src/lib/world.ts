@@ -1,6 +1,6 @@
 export interface World {
     things: Record<string, Thing>,
-    // peer id => thing id
+    /** Maps peer id to thing id */
     players: Record<string, string>,
 };
 

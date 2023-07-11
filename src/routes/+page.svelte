@@ -11,17 +11,36 @@
     let room_id: null | string = null;
     let client_dc = null;
 
+    let mic: Writable<MediaStream | null> = writable(null);
+
     const PEER_PREFIX = "tsbx-";
     const PEER_OPTIONS = {
-        key: "peerjs",
+        key: "peerjs", 
         host: "localhost",
         port: 9000,
-        path: "/myapp"
     };
 
     function host() {
+        setup_mic();
+
         let peer = new Peer(PEER_PREFIX + Math.random().toString(36).slice(2), PEER_OPTIONS);
         let connections = {};
+        let mediaConnections = {};
+        let audios: Record<string, HTMLAudioElement> = {};
+
+        function setupMedia(mc) {
+            mediaConnections[mc.peer] = mc;
+            mc.on("stream", function(stream) {
+                let audio = new Audio();
+                audio.srcObject = stream;
+                audio.play();
+                audios[mc.peer] = audio;
+            });
+            mc.on("close", function() {
+                delete mediaConnections[mc.peer];
+                delete audios[mc.peer];
+            });
+        }
 
         peer.on("open", function() {
             console.log("connected with id: " +peer.id);
@@ -52,6 +71,10 @@
                     dc.send(["world", $world]);
                     broadcast(connections, ["player_join", {id: thing_id, peer_id: dc.peer}]);
 
+                    // initiate call
+                    let mc = peer.call(dc.peer, $mic);
+                    setupMedia(mc);
+
                     // handle events
                     dc.on("data", function(data: [string, any]) {
                         let [type, payload] = data;
@@ -70,22 +93,61 @@
                     dc.on("close", function() {
                         delete connections[dc.peer];
 
-                        delete $world.things[thing_id];
-                        delete $world.players[dc.peer];
+                        world.update(function (world) {
+                            delete world.things[thing_id];
+                            delete world.players[dc.peer];
+                            return world;
+                        });
+                        
+
+                        broadcast(connections, ["player_leave", {id: thing_id, peer_id: dc.peer}]);
                     });
                 });
             });
 
             world.subscribe((world) => {
                 broadcast(connections, ["world", world]);
-            })
+            });
+
+            mic.subscribe((stream) => {
+                for (let peer_id of Object.keys($world.players)) {
+                    let mc = peer.call(peer_id, stream);
+                    setupMedia(mc);
+                }
+            });
+
+            peer.on("call", function(mc) {
+                mc.answer($mic);
+                setupMedia(mc);
+            });
         });
     }
 
     function join(room_id_: string, name: string) {
+        setup_mic();
+
         console.log('joining?' + room_id + ";" + name);
         let peer_id = PEER_PREFIX + room_id_;
         let peer = new Peer(PEER_PREFIX + Math.random().toString(36).slice(2), PEER_OPTIONS);
+        
+        let peers = new Set([peer_id]);
+        let mediaConnections = {};
+        let audios: Record<string, HTMLAudioElement> = {};
+
+        function setupMedia(mc) {
+            mediaConnections[mc.peer] = mc;
+            mc.on("stream", function(stream) {
+                let audio = new Audio();
+                audio.srcObject = stream;
+                audio.play();
+                audios[mc.peer] = audio;
+            });
+            mc.on("close", function() {
+                delete mediaConnections[mc.peer];
+                delete audios[mc.peer];
+            });
+        }
+
         peer.on("open", function() {
             console.log('connecting to ' + peer_id + "...");
             let dc = peer.connect(peer_id, {metadata: {name: name}});
@@ -101,6 +163,14 @@
                 case "player_id":
                     player_id = payload;
                     break;
+                case "player_join":
+                    peers.add(payload.peer_id);
+                    let mc = peer.call(payload.peer_id, $mic);
+                    setupMedia(mc);
+                    break;
+                case "player_leave":
+                    peers.delete(payload.peer_id);
+                    break;
                 case "world":
                     console.log("world", payload);
                     $world = payload;
@@ -112,6 +182,18 @@
                 room_id = null;
                 client_dc = null;
             });
+        });
+
+        peer.on("call", function(mc) {
+            mc.answer($mic);
+            setupMedia(mc);
+        });
+
+        mic.subscribe((stream) => {
+            for (let peer_id of peers) {
+                let mc = peer.call(peer_id, stream);
+                setupMedia(mc);
+            }
         });
     }
 
@@ -139,6 +221,12 @@
             }
         }
     };
+
+    function setup_mic() {
+        navigator.mediaDevices.getUserMedia({audio: true, video: false}).then(function (stream) {
+            $mic = stream;
+        });
+    }
 </script>
 <Network status={status} room_id={room_id} on:host={host} on:join={(evt) => join(evt.detail.room_id, evt.detail.name)} />
 <World world={$world} x={$world.things[player_id] && $world.things[player_id].x} y={$world.things[player_id] && $world.things[player_id].y} />
