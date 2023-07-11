@@ -1,4 +1,6 @@
 <script lang="ts">
+    export const prerender = true;
+
     import World from '$lib/World.svelte';
     import Network from '$lib/Network.svelte';
     import * as wld from '$lib/world';
@@ -14,11 +16,12 @@
     let mic: Writable<MediaStream | null> = writable(null);
 
     const PEER_PREFIX = "tsbx-";
-    const PEER_OPTIONS = {
+/*    const PEER_OPTIONS = {
         key: "peerjs", 
         host: "localhost",
         port: 9000,
-    };
+    }; */
+    const PEER_OPTIONS = {};
 
     function host() {
         setup_mic();
