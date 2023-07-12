@@ -1,6 +1,4 @@
 <script lang="ts">
-    export const prerender = true;
-
     import World from '$lib/World.svelte';
     import Network from '$lib/Network.svelte';
     import * as wld from '$lib/world';
